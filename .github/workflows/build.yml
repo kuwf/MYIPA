@@ -22,6 +22,8 @@ jobs:
           mkdir Payload
           cp -R build/Build/Products/Release-iphoneos/App.app Payload/
           zip -qr TutorLog.ipa Payload
+                    unzip -l TutorLog.ipa | head -20
+          ls build/Build/Products/Release-iphoneos/
       - uses: actions/upload-artifact@v4
         with:
           name: TutorLog-ipa
