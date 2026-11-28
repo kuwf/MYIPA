@@ -183,15 +183,16 @@ function invoice(c,s){
  const KT={inv:'فاتورة دروس خصوصية',rec:'إيصال استلام دفعة',stm:'كشف حساب'},KP={inv:'INV',rec:'REC',stm:'STM'};
  const money=v=>v+' ر.ع';
  let cur=null;
- const getO=()=>({per:$('f5').value,kind:$('f6').value,exp:$('f8').checked,showPay:$('f9').checked,from:getDate('a',true)||today(),to:getDate('b',true)||today()});
+ const getO=()=>({per:$('f5').value,kind:$('f6').value,exp:$('f8').value,showPay:$('f9').checked,from:getDate('a',true)||today(),to:getDate('b',true)||today()});
  function build(o){
-  const lp=lastPay(c,s),td=today();let start='0000-00-00',end=o.exp?'9999-12-31':td,label;
+  const lp=lastPay(c,s),td=today(),expOn=o.exp!=='0';let start='0000-00-00',end=o.exp==='all'?'9999-12-31':o.exp==='m'?td.slice(0,7)+'-31':td,label;
   if(o.per==='all')label='كل الحصص حتى اليوم';
-  else if(o.per==='last'){if(lp)start=lp.date;label=lp?'من '+fd(lp.date)+' إلى '+fd(td):'كل الحصص حتى اليوم'}
+  else if(o.per==='last'&&o.kind==='rec'){if(lp)start=lp.date;label=lp?'من '+fd(lp.date)+' إلى '+fd(td):'كل الحصص حتى اليوم'}
+  else if(o.per==='last'){const rr=alloc(c,s,end,expOn).rows,f=rr.find(r=>r.rem>0||r.exp);start=f?f.d:'9999-12-31';const l=rr.length?rr[rr.length-1].d:start;label=f?(start===l?'حصة غير مدفوعة: '+fd(start):'الحصص غير المدفوعة: من '+fd(start)+' إلى '+fd(l)):'لا توجد حصص غير مدفوعة'}
   else if(o.per==='custom'){start=o.from;end=o.to;label='من '+fd(start)+' إلى '+fd(end)}
   else{start=o.per+'-01';end=o.per+'-31';label=mname(o.per)}
-  if(o.exp&&(o.per==='last'||o.per==='all'))label+=' (مع الحصص المتوقعة)';
-  const a=alloc(c,s,end,o.exp),pr=a.rows.filter(r=>r.d>=start);
+  if(expOn&&(o.per==='last'||o.per==='all'))label+=o.exp==='m'?' (مع المتوقعة حتى نهاية الشهر)':' (مع كل الحصص المتوقعة)';
+  const a=alloc(c,s,end,expOn),pr=a.rows.filter(r=>r.d>=start);
   const prev=R3(a.rows.filter(r=>r.d<start).reduce((x,r)=>x+r.rem,0));
   const tot=R3(pr.reduce((x,r)=>x+r.cost,0)),rem=R3(pr.reduce((x,r)=>x+r.rem,0)),paid=R3(tot-rem);
   const expTot=R3(pr.filter(r=>r.exp).reduce((x,r)=>x+r.cost,0));
@@ -213,12 +214,12 @@ function invoice(c,s){
   const notes=[];
   if(adv>0)notes.push('الرصيد المقدّم يُخصم تلقائيًا من الحصص القادمة.');
   if(expTot>0)notes.push('الحصص «المتوقعة» لم تُؤخذ بعد، وتُسوّى عند حضورها.');
-  const key=[s.id,o.per,o.per==='custom'?start+end:'',o.kind,o.exp?1:0,due,tot].join('|');
+  const key=[s.id,o.per,o.per==='custom'?start+end:'',o.kind,o.exp,due,tot].join('|');
   const ex=(S.invlog||[]).find(x=>x.key===key&&x.day===today());
   const num=KP[o.kind]+'-'+String(ex?ex.n:(S.invn||0)+1).padStart(4,'0'),title=KT[o.kind];
   const greet=S.greet===undefined?'السلام عليكم ورحمة الله،':S.greet;
   const txt=[...(greet?[greet,'']:[]),title+' — '+owner,'الطالب: '+s.name,'الفترة: '+label,'',...pr.map(r=>'• '+fd(r.d)+(two(r.d)?' (ساعتان)':'')+' — '+money(r.cost)+' — '+st(r)+(r.flag&&pdt(r)!=='—'?' ('+pdt(r)+')':'')),...(pays.length?['','الدفعات:',...pays.map(e=>'- '+payLine(e))]:[]),'',...sum.map(r=>r[1]?r[0]+': '+r[1]:r[0]),...(notes.length?['',...notes]:[])].join('\n');
-  const tbl=pr.length?'<div class="wrap" style="max-height:32vh"><table><thead><tr><th>التاريخ</th><th>المبلغ</th><th>الحالة</th>'+(showPd?'<th>تاريخ الدفع</th>':'')+'</tr></thead><tbody>'+pr.map(r=>`<tr><td>${fd(r.d)}<br><small>${two(r.d)?'ساعتان':'ساعة'}</small></td><td>${r.cost}</td><td class="${r.exp?'':r.rem===0?'ok':'no'}">${st(r)}</td>${showPd?'<td>'+pdt(r)+'</td>':''}</tr>`).join('')+'</tbody></table></div>':'<p class="empty" style="padding:14px">لا توجد حصص في هذه الفترة.</p>';
+  const tbl=pr.length?'<div class="wrap" style="max-height:32vh"><table><thead><tr><th>التاريخ</th><th>المبلغ</th><th>الحالة</th>'+(showPd?'<th>تاريخ الدفع</th>':'')+'</tr></thead><tbody>'+pr.map(r=>`<tr><td>${fd(r.d)}<br><small>${two(r.d)?'ساعتان':'ساعة'}</small></td><td>${r.cost}</td><td class="${r.exp?'':r.rem===0?'ok':'no'}">${st(r)}</td>${showPd?'<td>'+pdt(r)+'</td>':''}</tr>`).join('')+'</tbody></table></div>':'<p class="empty" style="padding:14px">'+(o.per==='last'&&o.kind!=='rec'?'لا توجد حصص غير مدفوعة 🎉':'لا توجد حصص في هذه الفترة.')+'</p>';
   const pblock=pays.length?'<p class="im"><b>'+(o.kind==='rec'?'الدفعات المستلمة:':'الدفعات:')+'</b><br>'+pays.map(e=>esc(payLine(e))).join('<br>')+'</p>':'';
   const html=`<div class="inv"><div class="ih"><b>${esc(owner)}</b><span>${title}</span></div><div class="im">رقم ${num} · تاريخ الإصدار ${fd(today())}</div><div class="im">الطالب: <b>${esc(s.name)}</b> · ${esc(c.name)}<br>الفترة: ${label}</div>`+(o.kind==='rec'?pblock+tbl:tbl+pblock)+'<div class="sum">'+sum.map(r=>`<div class="${r===fin?'tt':''}"><span>${r[0]}</span><b>${r[1]}</b></div>`).join('')+'</div>'+(notes.length?'<ul class="nl">'+notes.map(n=>'<li>'+esc(n)+'</li>').join('')+'</ul>':'')+(due===0&&pr.length?'<div class="stamp">مسدّد بالكامل ✓</div>':'')+'</div>';
   return{html,txt,pr,pays,sum,notes,due,adv,label,num,title,key,st,pdt,two,payLine,fin,showPd};
@@ -253,8 +254,8 @@ function invoice(c,s){
   else{const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=f.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000)}
  };
  const lp0=lastPay(c,s);
- const popts='<option value="last">من آخر دفعة إلى اليوم</option>'+months.map(m=>`<option value="${m}">${mname(m)}</option>`).join('')+'<option value="custom">من تاريخ إلى تاريخ…</option><option value="all">كل الحصص (حتى اليوم)</option>';
- modal('مستند للولي','<div class="ictl"><label>نوع المستند</label><select id="f6"><option value="inv">فاتورة (قبل الدفع)</option><option value="rec">إيصال استلام</option><option value="stm">كشف حساب</option></select><label>الفترة</label><select id="f5">'+popts+'</select><div id="ivc" style="display:none"><label>من</label>'+dateForm(today(),'a')+'<label>إلى</label>'+dateForm(today(),'b')+'</div><label class="chk"><input type="checkbox" id="f8"> تضمين الحصص المتوقعة (التي لم تُؤخذ بعد)</label><label class="chk"><input type="checkbox" id="f9"> إظهار الدفعات السابقة في الفاتورة</label></div><div id="ivb"></div><label>نص جاهز للإرسال (يمكنك تعديله)</label><textarea id="f1"></textarea>',[
+ const popts='<option value="last">الحصص غير المدفوعة (من أول حصة لم تُدفع)</option>'+months.map(m=>`<option value="${m}">${mname(m)}</option>`).join('')+'<option value="custom">من تاريخ إلى تاريخ…</option><option value="all">كل الحصص (حتى اليوم)</option>';
+ modal('مستند للولي','<div class="ictl"><label>نوع المستند</label><select id="f6"><option value="inv">فاتورة (قبل الدفع)</option><option value="rec">إيصال استلام</option><option value="stm">كشف حساب</option></select><label>الفترة</label><select id="f5">'+popts+'</select><div id="ivc" style="display:none"><label>من</label>'+dateForm(today(),'a')+'<label>إلى</label>'+dateForm(today(),'b')+'</div><label>الحصص المتوقعة (التي لم تُؤخذ بعد)</label><select id="f8"><option value="0">بدون</option><option value="m">تضمين المتبقي حتى نهاية هذا الشهر</option><option value="all">تضمين كل الحصص المضافة</option></select><label class="chk"><input type="checkbox" id="f9"> إظهار الدفعات السابقة في الفاتورة</label></div><div id="ivb"></div><label>نص جاهز للإرسال (يمكنك تعديله)</label><textarea id="f1"></textarea>',[
   {t:'✓ تم الدفع',f:()=>{if(!(cur.due>0)){alert('لا يوجد مبلغ مطلوب في هذه الفاتورة');return false}const amt=cur.due;document.querySelectorAll('.ov').forEach(o=>o.remove());quickPay(c,s,amt);return false}},
   {t:'واتساب',c:'alt',f:()=>{logIssue(cur);wa(s,$('f1').value);return false}},
   {t:'حفظ كصورة',c:'alt',f:()=>{logIssue(cur);img();return false}},
@@ -262,7 +263,7 @@ function invoice(c,s){
   {t:'طباعة',c:'alt',f:()=>{logIssue(cur);window.print();return false}},
   {t:'إغلاق',c:'alt'}]);
  const refresh=()=>{$('ivc').style.display=$('f5').value==='custom'?'block':'none';cur=build(getO());$('ivb').innerHTML=cur.html;$('f1').value=cur.txt};
- $('f5').value=lp0?'last':cm;
+ $('f5').value='last';
  $('f5').closest('.md').addEventListener('change',e=>{if(e.target.id!=='f1')refresh()});
  refresh();
 }
